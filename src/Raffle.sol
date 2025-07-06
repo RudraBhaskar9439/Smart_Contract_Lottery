@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
+import {VRFConsumerBaseV2Plus} from "../lib/chainlink-brownie-contracts/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
+import {VRFV2PlusClient} from "../lib/chainlink-brownie-contracts/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 /**
  * @title A simple Raffle contract
  * @dev Implements ChainLink VRFv2.5
@@ -8,7 +10,8 @@ pragma solidity ^0.8.19;
  * @notice This contract allows users to enter in a Lottery~Style raffle.
  */
 
-contract Raffle {
+contract Raffle is VRFConsumerBaseV2Plus {
+
     /* Errors */
     error Raffle__SendMoreToEnterRaffle();
 
@@ -18,15 +21,24 @@ contract Raffle {
     // @dev The duration of lottery in seconds
     uint256 private immutable i_interval;
     uint256 private s_lastTimeStamp;
+    bytes32 private immutable i_keyHash;
+    uint256 private i_subscriptionId;
+    uint16 private constant REQUEST_CONFIRMATIONS = 3;
+    uint32 private immutable i_callbackGasLimit;
+    uint32 private constant NUM_WORDS = 1; // Number of random words to request
 
     /* Events */
     event RaffleEntered(address indexed player);
 
 
-    constructor(uint256 entranceFee, uint256 interval){
+    constructor(uint256 entranceFee, uint256 interval, address vrfCoordinator, bytes32 gasLane, uint256 subscriptionId, uint32 callbackGasLimit ) VRFConsumerBaseV2Plus(vrfCoordinator){
         i_entranceFee = entranceFee;
         i_interval = interval;
         s_lastTimeStamp = block.timestamp;
+        i_keyHash = gasLane;
+        i_subscriptionId = subscriptionId;
+        i_callbackGasLimit = callbackGasLimit;
+    
     }
     // Difference between public and external:
 //     // Feature	                 public	                                       external
@@ -71,15 +83,39 @@ contract Raffle {
     function pickWinner() external {
         //check to see if enough time has passed
         if ((block.timestamp - s_lastTimeStamp) < i_interval ){
-            revert();
+            revert("Not enough time has passed");
         }
-        
+        VRFV2PlusClient.RandomWordsRequest memory request = VRFV2PlusClient.RandomWordsRequest(
+            {
+                keyHash: i_keyHash, // Price I am willing to pay for the random number
+                subId: i_subscriptionId,
+                requestConfirmations: REQUEST_CONFIRMATIONS,
+                callbackGasLimit: i_callbackGasLimit,  // Gas limit for the callback function
+                numWords: NUM_WORDS,
+                extraArgs: VRFV2PlusClient._argsToBytes(
+                    // Set nativePayments to true to pay for VRF requests with sepolia ETH instead of LINK
+                    VRFV2PlusClient.ExtraArgsV1({nativePayment: false})
+                )
+            }
+            
+        );
+        uint256 requestId =s_vrfCoordinator.requestRandomWords(request);
     }
+        // Get our Rnadom Number using ChainLink VRF
+        // 1. Request RNG
+        // 2. Get RNG
+         // Chainlink VRF will call this function with the random words
+    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal override {
+        // TODO: Use randomWords to pick a winner and handle payout
+    }
+
+        
+    
 
     /**
      * Getter Functions
      */
-    function getEntraceFee() external view returns (uint256) {
+    function getEntranceFee() external view returns (uint256) {
         return i_entranceFee;
     }
     
