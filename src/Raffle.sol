@@ -15,6 +15,17 @@ contract Raffle is VRFConsumerBaseV2Plus {
     /* Errors */
     error Raffle__SendMoreToEnterRaffle();
     error Raffle__TransferFailed();
+    error Raffle__RaffleNotOpen();
+
+// Enums in Solidity are user-defined types that allow you to name and group a set of related constant values. 
+// They improve code readability by replacing numeric constants with descriptive names. 
+// Internally, enum values are stored as uint, starting from 0.
+
+    /* Type Declaration */
+    enum RaffleState {
+        OPEN,        //0
+        CALCULATING  //1
+    }
 
     /* State Variables */
     uint256 private immutable i_entranceFee;
@@ -28,6 +39,9 @@ contract Raffle is VRFConsumerBaseV2Plus {
     uint32 private immutable i_callbackGasLimit;
     uint32 private constant NUM_WORDS = 1; // Number of random words to request
     address private s_recentWinner;
+    RaffleState private s_raffleState ;
+
+    
 
     /* Events */
     event RaffleEntered(address indexed player);
@@ -40,6 +54,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
         i_keyHash = gasLane;
         i_subscriptionId = subscriptionId;
         i_callbackGasLimit = callbackGasLimit;
+        s_raffleState = RaffleState.OPEN;  // Equivalent to s_raffleState = RaffleState(0); 
     
     }
     // Difference between public and external:
@@ -56,6 +71,9 @@ contract Raffle is VRFConsumerBaseV2Plus {
         // Method-2 (Lowest Gas Cost)
             if(msg.value < i_entranceFee) {
                 revert Raffle__SendMoreToEnterRaffle();
+            }
+            if(s_raffleState != RaffleState.OPEN) {
+                revert Raffle__RaffleNotOpen();
             }
             s_players.push(payable(msg.sender));
         // Method-3 (Medium Gas Cost)
@@ -87,6 +105,9 @@ contract Raffle is VRFConsumerBaseV2Plus {
         if ((block.timestamp - s_lastTimeStamp) < i_interval ){
             revert("Not enough time has passed");
         }
+
+        s_raffleState = RaffleState.CALCULATING; // Set the raffle state to CALCULATING
+
         VRFV2PlusClient.RandomWordsRequest memory request = VRFV2PlusClient.RandomWordsRequest(
             {
                 keyHash: i_keyHash, // Price I am willing to pay for the random number
@@ -121,13 +142,11 @@ contract Raffle is VRFConsumerBaseV2Plus {
         uint256 indexOfWinner = randomWords[0] % s_players.length;
         address payable recentWinner = s_players[indexOfWinner];
         s_recentWinner = recentWinner;
+        s_raffleState = RaffleState.OPEN; // Set the raffle state back to OPEN
         (bool success,) = recentWinner.call{value: address(this).balance}("");
         if(!success) {
             revert Raffle__TransferFailed();
         }
-
-
-
     }
 
     /**
