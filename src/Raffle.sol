@@ -16,6 +16,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
     error Raffle__SendMoreToEnterRaffle();
     error Raffle__TransferFailed();
     error Raffle__RaffleNotOpen();
+    error Raffle__UpkeepNotNeeded(uint256 balance, uint256 playerslength, uint256 raffleState);
 
 // Enums in Solidity are user-defined types that allow you to name and group a set of related constant values. 
 // They improve code readability by replacing numeric constants with descriptive names. 
@@ -132,7 +133,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
         //check to see if enough time has passed
        (bool upkeepNeeded,) = checkUpkeep("");
        if(!upkeepNeeded){
-        revert();
+        revert Raffle__UpkeepNotNeeded(address(this).balance, s_players.length,uint256(s_raffleState));
        }
 
         s_raffleState = RaffleState.CALCULATING; // Set the raffle state to CALCULATING
@@ -151,7 +152,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
             }
             
         );
-        uint256 requestId =s_vrfCoordinator.requestRandomWords(request);
+        s_vrfCoordinator.requestRandomWords(request);
     }
         // Get our Rnadom Number using ChainLink VRF
         // 1. Request RNG
@@ -169,7 +170,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
 // The function used override here because its parent contract is abstract and the function is internal virtual
 
     // CEI: Checks, Effects, Interactions Pattern
-    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal override {
+    function fulfillRandomWords(uint256 /*requestId */, uint256[] calldata randomWords) internal override {
         // Checks
             // Conditionals and require statements are checks
 
