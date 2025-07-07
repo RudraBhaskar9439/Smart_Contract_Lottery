@@ -88,10 +88,10 @@ contract Raffle is VRFConsumerBaseV2Plus {
         VRFV2PlusClient.RandomWordsRequest memory request = VRFV2PlusClient.RandomWordsRequest(
             {
                 keyHash: i_keyHash, // Price I am willing to pay for the random number
-                subId: i_subscriptionId,
-                requestConfirmations: REQUEST_CONFIRMATIONS,
+                subId: i_subscriptionId, // Subscription ID for the VRF service
+                requestConfirmations: REQUEST_CONFIRMATIONS, // number of confirmations before the request is considered valid
                 callbackGasLimit: i_callbackGasLimit,  // Gas limit for the callback function
-                numWords: NUM_WORDS,
+                numWords: NUM_WORDS,  // number of random words to request
                 extraArgs: VRFV2PlusClient._argsToBytes(
                     // Set nativePayments to true to pay for VRF requests with sepolia ETH instead of LINK
                     VRFV2PlusClient.ExtraArgsV1({nativePayment: false})
@@ -106,11 +106,17 @@ contract Raffle is VRFConsumerBaseV2Plus {
         // 2. Get RNG
          // Chainlink VRF will call this function with the random words
     function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal override {
-        // TODO: Use randomWords to pick a winner and handle payout
-    }
+        // The function used override here because its parent contract is abstract and the function is internal virtual
 
-        
-    
+//         Feature	                                    calldata	                                  memory
+//         Location	                       Non-modifiable, temporary, read-only	                Modifiable, temporary
+//        Storage Place                 	   Input data of function call                 	Allocated in memory at runtime
+//         Mutability	                          ❌ Cannot be modified	                         ✅ Can be modified
+//         Gas Cost	                       ✅ Cheaper (no copying unless needed)	           ❌ More expensive (copies data)
+//         Use Case	                          Best for external function inputs	           Best for local variables or modifiable parameters
+//       Access Speed	                     Fast (direct reference to call data)	        Slower (data copied into memory)
+//         // TODO: Use randomWords to pick a winner and handle payout
+    }
 
     /**
      * Getter Functions
