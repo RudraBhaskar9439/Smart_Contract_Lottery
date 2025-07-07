@@ -45,6 +45,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
 
     /* Events */
     event RaffleEntered(address indexed player);
+    event WinnerPicked(address indexed winner);
 
 
     constructor(uint256 entranceFee, uint256 interval, address vrfCoordinator, bytes32 gasLane, uint256 subscriptionId, uint32 callbackGasLimit ) VRFConsumerBaseV2Plus(vrfCoordinator){
@@ -100,11 +101,39 @@ contract Raffle is VRFConsumerBaseV2Plus {
     // 2. Use random number to pick a player
     // 3. Be automatically called
 
-    function pickWinner() external {
-        //check to see if enough time has passed
-        if ((block.timestamp - s_lastTimeStamp) < i_interval ){
-            revert("Not enough time has passed");
+    // When should the winner be pciked?
+    /***
+     * @dev This is a function that the chainlink nodes will call to see 
+     * if lottery is ready to have a winner picked.
+     * The following should be true in order for upkeepNeeded to be true:
+     * 1. The time interval has passed between raffle runs
+     * 2. The lottery is in a state of OPEN
+     * 3. The contract has ETH
+     * 4. Implicitly, your subscription has LINK
+     * @param - ignored
+     * @return upkeepNeeded - true if it's time to restart the lottery
+     * @return - ignored
+     */
+
+    function checkUpkeep(bytes memory /*checkData*/) 
+        public 
+        view 
+        returns(bool upkeepNeeded, bytes memory /* performData */)
+        {
+         bool timeHasPassed = ((block.timestamp - s_lastTimeStamp) >= i_interval ); // Check if enough time has passed
+         bool isOPEN = s_raffleState ==RaffleState.OPEN; // Check if the raffle is in OPEN state
+         bool hasBalance = address(this).balance > 0; // Check if the contract has a balance
+         bool hasPlayers = s_players.length > 0; // Check if there is players in the raffle 
+         upkeepNeeded = timeHasPassed && isOPEN && hasBalance && hasPlayers; // All condiitons must be true for upkeepNeeded to be true
+         return (upkeepNeeded,""); // Return the upkeepNeeded boolean and an empty bytes array
         }
+
+    function performUpkeep(bytes calldata /* performData */) external {
+        //check to see if enough time has passed
+       (bool upkeepNeeded,) = checkUpkeep("");
+       if(!upkeepNeeded){
+        revert();
+       }
 
         s_raffleState = RaffleState.CALCULATING; // Set the raffle state to CALCULATING
 
@@ -127,9 +156,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
         // Get our Rnadom Number using ChainLink VRF
         // 1. Request RNG
         // 2. Get RNG
-         // Chainlink VRF will call this function with the random words
-    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal override {
-        // The function used override here because its parent contract is abstract and the function is internal virtual
+        // Chainlink VRF will call this function with the random words
 
 //         Feature	                                    calldata	                                  memory
 //         Location	                       Non-modifiable, temporary, read-only	                Modifiable, temporary
@@ -138,15 +165,30 @@ contract Raffle is VRFConsumerBaseV2Plus {
 //         Gas Cost	                       ✅ Cheaper (no copying unless needed)	           ❌ More expensive (copies data)
 //         Use Case	                          Best for external function inputs	           Best for local variables or modifiable parameters
 //       Access Speed	                     Fast (direct reference to call data)	        Slower (data copied into memory)
-//         // TODO: Use randomWords to pick a winner and handle payout
+
+// The function used override here because its parent contract is abstract and the function is internal virtual
+
+    // CEI: Checks, Effects, Interactions Pattern
+    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal override {
+        // Checks
+            // Conditionals and require statements are checks
+
+
+        //Effects (Internal Contract State)
         uint256 indexOfWinner = randomWords[0] % s_players.length;
         address payable recentWinner = s_players[indexOfWinner];
         s_recentWinner = recentWinner;
         s_raffleState = RaffleState.OPEN; // Set the raffle state back to OPEN
+        s_players = new address payable[](0); // Reset the players array for the next raffle
+        s_lastTimeStamp = block.timestamp; // Update the last timestamp to the current block timestamp
+        emit WinnerPicked(s_recentWinner);
+
+        // Interactions (External Contract Interactions)
         (bool success,) = recentWinner.call{value: address(this).balance}("");
         if(!success) {
             revert Raffle__TransferFailed();
         }
+        
     }
 
     /**
