@@ -39,7 +39,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
     uint32 private immutable i_callbackGasLimit;
     uint32 private constant NUM_WORDS = 1; // Number of random words to request
     address private s_recentWinner;
-    RaffleState private s_raffleState ;
+    RaffleState private s_raffleState ;// Start as OPEN
 
     
 
@@ -151,7 +151,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
             }
             
         );
-        uint256 requestId =s_vrfCoordinator.requestRandomWords(request);
+        s_vrfCoordinator.requestRandomWords(request);
     }
         // Get our Rnadom Number using ChainLink VRF
         // 1. Request RNG
@@ -169,7 +169,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
 // The function used override here because its parent contract is abstract and the function is internal virtual
 
     // CEI: Checks, Effects, Interactions Pattern
-    function fulfillRandomWords(uint256 requestId, uint256[] calldata randomWords) internal override {
+    function fulfillRandomWords(uint256 /* requestId */ , uint256[] calldata randomWords) internal override {
         // Checks
             // Conditionals and require statements are checks
 
@@ -196,6 +196,14 @@ contract Raffle is VRFConsumerBaseV2Plus {
      */
     function getEntranceFee() external view returns (uint256) {
         return i_entranceFee;
+    }
+
+    function getRaffleState() external view returns (RaffleState) {
+        return s_raffleState;
+    }
+
+    function getPlayer(uint256 indexOfPlayer) external view returns (address) {
+        return s_players[indexOfPlayer];
     }
     
 }
