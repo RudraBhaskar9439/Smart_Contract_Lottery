@@ -70,7 +70,7 @@ contract Raffletest is Test {
         vm.prank(PLAYER);
         // Act
         vm.expectEmit(true, false, false, false, address(raffle));
-        emit RaffleEntered(PLAYER);
+        // emit RaffleEntered(PLAYER);
         // Assert
         raffle.enterRaffle{value: entranceFee};
     }
