@@ -5,18 +5,19 @@ import {Test} from "lib/forge-std/src/Test.sol";
 import {DeployRaffle} from "script/DeployRaffle.s.sol";
 import {Raffle} from "../../src/Raffle.sol";
 import {HelperConfig} from "script/HelperConfig.s.sol";
+import {VRFCoordinatorV2_5Mock} from "../../lib/chainlink-brownie-contracts/contracts/src/v0.8/vrf/mocks/VRFCoordinatorV2_5Mock.sol";
 
 
 contract Raffletest is Test {
     Raffle public raffle;
-    HelperConfig public helperConfig;
+    // HelperConfig public helperConfig;
 
-        uint256 entranceFee;
-        uint256 interval;
-        address vrfCoordinator;
-        bytes32 gasLane;
-        uint32 callbackGasLimit;
-        uint256 subscriptionId;
+    uint256 entranceFee;
+    uint256 interval;
+    VRFCoordinatorV2_5Mock vrfCoordinator;
+    bytes32 gasLane;
+    uint32 callbackGasLimit;
+    uint256 subscriptionId;
 
     //Test user address
     address public PLAYER = makeAddr("player");
@@ -27,17 +28,28 @@ contract Raffletest is Test {
     
 
     function setUp() external {
-        DeployRaffle deployer = new DeployRaffle();
-        (raffle, helperConfig) = deployer.deployContract();
-        HelperConfig.NetworkConfig memory config = helperConfig.getConfig();
-        entranceFee = config.entranceFee;
-        interval = config.interval;
-        vrfCoordinator = config.vrfCoordinator;
-        gasLane = config.gasLane;
-        callbackGasLimit = config.callbackGasLimit;
-        subscriptionId = config.subscriptionId;
-
+        // Deploy VRFCoordinator mock
+        vrfCoordinator = new VRFCoordinatorV2_5Mock(0.25 ether, 1e9, 4e15);
+        // Create a subscription
+        subscriptionId = vrfCoordinator.createSubscription();
+        // Fund the subscription (arbitrary amount)
+        vrfCoordinator.fundSubscription(subscriptionId, 1 ether);
+        entranceFee = 0.01 ether;
+        interval = 30;
+        gasLane = 0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae;
+        callbackGasLimit = 500000;
+        // Deploy Raffle contract
+        raffle = new Raffle(
+            entranceFee,
+            interval,
+            address(vrfCoordinator),
+            gasLane,
+            subscriptionId,
+            callbackGasLimit
+        );
         vm.deal(PLAYER, STARTING_PLAYER_BALANCE);
+        // Add Raffle as consumer to VRFCoordinatorV2_5Mock
+        vrfCoordinator.addConsumer(subscriptionId, address(raffle));
     }
 
     function testRaffleInitializationInOpenState() external {
@@ -70,9 +82,8 @@ contract Raffletest is Test {
         vm.prank(PLAYER);
         // Act
         vm.expectEmit(true, false, false, false, address(raffle));
-        // emit RaffleEntered(PLAYER);
-        // Assert
-        raffle.enterRaffle{value: entranceFee};
+        emit RaffleEntered(PLAYER);
+        raffle.enterRaffle{value: entranceFee}();
     }
 
     function testDontAllowPlayersToEnterWhileRaffleIsCalculating() public {
@@ -84,7 +95,7 @@ contract Raffletest is Test {
         raffle.performUpkeep("");
 
         // Act // Assert
-        vm.expectRevert(Raffle.Raffle__SendMoreToEnterRaffle.selector);
+        vm.expectRevert(Raffle.Raffle__RaffleNotOpen.selector);
         vm.prank(PLAYER);
         raffle.enterRaffle{value: entranceFee}();
        
