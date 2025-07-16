@@ -16,6 +16,8 @@ contract Raffle is VRFConsumerBaseV2Plus {
     error Raffle__SendMoreToEnterRaffle();
     error Raffle__TransferFailed();
     error Raffle__RaffleNotOpen();
+    error Raffle__UpkeepNotNeeded(uint256 balance, uint256 numPlayers, uint256 raffleState);
+    
 
 // Enums in Solidity are user-defined types that allow you to name and group a set of related constant values. 
 // They improve code readability by replacing numeric constants with descriptive names. 
@@ -46,6 +48,7 @@ contract Raffle is VRFConsumerBaseV2Plus {
     /* Events */
     event RaffleEntered(address indexed player);
     event WinnerPicked(address indexed winner);
+    event RequestedRaffleWinner(uint256 indexed requestId);
 
 
     constructor(uint256 entranceFee, uint256 interval, address vrfCoordinator, bytes32 gasLane, uint256 subscriptionId, uint32 callbackGasLimit ) VRFConsumerBaseV2Plus(vrfCoordinator){
@@ -132,8 +135,8 @@ contract Raffle is VRFConsumerBaseV2Plus {
         //check to see if enough time has passed
        (bool upkeepNeeded,) = checkUpkeep("");
        if(!upkeepNeeded){
-        revert();
-       }
+            revert Raffle__UpkeepNotNeeded(address(this).balance, s_players.length, uint256(s_raffleState));
+}
 
         s_raffleState = RaffleState.CALCULATING; // Set the raffle state to CALCULATING
 
@@ -151,7 +154,8 @@ contract Raffle is VRFConsumerBaseV2Plus {
             }
             
         );
-        s_vrfCoordinator.requestRandomWords(request);
+        uint256 requestId = s_vrfCoordinator.requestRandomWords(request);
+        emit RequestedRaffleWinner(requestId);
     }
         // Get our Rnadom Number using ChainLink VRF
         // 1. Request RNG

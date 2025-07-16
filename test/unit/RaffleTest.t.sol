@@ -6,6 +6,7 @@ import {DeployRaffle} from "script/DeployRaffle.s.sol";
 import {Raffle} from "../../src/Raffle.sol";
 import {HelperConfig} from "script/HelperConfig.s.sol";
 import {VRFCoordinatorV2_5Mock} from "../../lib/chainlink-brownie-contracts/contracts/src/v0.8/vrf/mocks/VRFCoordinatorV2_5Mock.sol";
+import {Vm} from "lib/forge-std/src/Vm.sol";
 
 
 contract Raffletest is Test {
@@ -99,6 +100,103 @@ contract Raffletest is Test {
         vm.prank(PLAYER);
         raffle.enterRaffle{value: entranceFee}();
        
+    }
+
+    function testCheckUpkeepReturnsFalseIfItHasNoBalance() public {
+        // Arrange
+        vm.warp(block.timestamp + interval +1);
+        vm.roll(block.number +1 );
+
+        // Act
+        (bool upkeepNeeded,) = raffle.checkUpkeep("");
+
+        // Assert
+        assert(!upkeepNeeded);
+    }
+
+    function testChekcUpkeepReturnsFalseIfRaffleIsntOpen() public {
+        // Arrange
+        vm.prank(PLAYER);
+        raffle.enterRaffle{value: entranceFee}();
+        vm.warp(block.timestamp + interval +1);
+        vm.roll(block.number +1 );
+         raffle.performUpkeep("");
+
+         // Act
+         (bool upkeepNeeded,) = raffle.checkUpkeep("");
+
+         // Assert
+         assert(!upkeepNeeded);
+    }
+
+    ////////////////////////////////// Perform Upkeep ///////////////////////////////////////
+    function testPerformUpkeepCanOnlyRunIfCheckUpkeepIsTrue() public {
+        // Arrange
+        vm.prank(PLAYER);
+        raffle.enterRaffle{value: entranceFee}();
+        vm.warp(block.timestamp + interval +1);
+        vm.roll(block.number +1 );
+
+        // Act // Assert
+        raffle.performUpkeep("");
+        
+    }
+
+    function testPerformUpkeepRevertsIfCheckUpkeepIsFalse() public {
+        // Arrange
+        uint256 currentBalance = 0;
+        uint256 numPlayers = 0;
+        Raffle.RaffleState rState = raffle.getRaffleState();
+
+        vm.prank(PLAYER);
+        raffle.enterRaffle{value: entranceFee}();
+        currentBalance = currentBalance + entranceFee;
+        numPlayers = 1;
+
+
+        // Act // Assert
+        vm.expectRevert(
+            abi.encodeWithSelector(Raffle.Raffle__UpkeepNotNeeded.selector, currentBalance, numPlayers, rState)
+        );
+        raffle.performUpkeep("");
+
+    }
+
+    modifier raffleEntered() {
+        vm.prank(PLAYER);
+        raffle.enterRaffle{value: entranceFee}();
+        vm.warp(block.timestamp + interval +1);
+        vm.roll(block.number +1 );
+        _;
+    }
+
+    //What if we need tp get data from emitted events in our tests?
+    function testPerformUpkeepUpdatesRaffleStateAndEmitsRequestId() public raffleEntered {
+
+        // Arrange
+       //  It is in the Modifier 
+
+        // Act
+        vm.recordLogs();
+        raffle.performUpkeep("");
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        bytes32 requestId = entries[1].topics[1];
+
+        // Assert
+        Raffle.RaffleState raffleState = raffle.getRaffleState();
+        assert(uint256(requestId) >0);
+        assert(uint256(raffleState) == 1);
+    
+    }
+
+    /////////////////////// FulFill Random Words ///////////////////////
+
+    function testFulfillrandomWordsCanOnlyBeCalledAfterPerformUpkeep(uint256 randomRequestId) public  raffleEntered{ // raffleEntered is the modifier that enters the raffle
+    // Arrange // Act // Assert
+    vm.expectRevert(VRFCoordinatorV2_5Mock.InvalidRequest.selector);
+    VRFCoordinatorV2_5Mock(vrfCoordinator).fulfillRandomWords(randomRequestId, address(raffle));
+
+
     }
 
 }
